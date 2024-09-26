@@ -1,8 +1,8 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import os
-import re
 import asyncio
 from typing import List, Optional
 from dataclasses import dataclass, asdict
@@ -16,16 +16,17 @@ from twitchAPI.eventsub.websocket import EventSubWebsocket
 from twitchAPI.type import AuthScope
 
 
-
-TWITCH_OAUTH_APP_ID = os.environ.get('TWITCH_OAUTH_APP_ID')
-TWITCH_OAUTH_APP_SECRET = os.environ.get('TWITCH_OAUTH_APP_SECRET')
+TWITCH_OAUTH_APP_ID = os.environ.get("TWITCH_OAUTH_APP_ID")
+TWITCH_OAUTH_APP_SECRET = os.environ.get("TWITCH_OAUTH_APP_SECRET")
 TARGET_SCOPES = [AuthScope.MODERATOR_READ_FOLLOWERS, AuthScope.USER_READ_CHAT]
+
 
 @dataclass
 class ControlInput:
     name: str
     min: float
     max: float
+
 
 @dataclass
 class Action:
@@ -37,13 +38,14 @@ class Action:
 # Shared state object
 actions: List[Action] = []
 
+
 def parse_control_message(message: str) -> Optional[Action]:
     if message == "handbrake":
         message = "parkingbrake"
     if message in ["throttle", "brake", "clutch", "left", "right", "parkingbrake"]:
         return Action(
-            control=message, 
-            intensity=1.0, 
+            control=message,
+            intensity=1.0,
             duration=1,
         )
     return None
@@ -51,14 +53,16 @@ def parse_control_message(message: str) -> Optional[Action]:
 
 async def on_follow(data: ChannelFollowEvent):
     # our event happened, lets do things with the data we got!
-    print(f'{data.event.user_name} now follows {data.event.broadcaster_user_name}!')
+    print(f"{data.event.user_name} now follows {data.event.broadcaster_user_name}!")
 
 
 async def on_message(data: ChannelChatMessageEvent):
     message = data.event.message.text
     action = parse_control_message(message)
     if action:
-        print(f"Got control message: {action.control} at {action.intensity * 100}% for {action.duration} seconds")
+        print(
+            f"Got control message: {action.control} at {action.intensity * 100}% for {action.duration} seconds"
+        )
         # For steering it's -1 to 1, so convert that real quick
         if action.control in ["left", "right"]:
             if action.control == "left":
@@ -86,13 +90,14 @@ async def twitch_event_listener():
     # We have to subscribe to the first topic within 10 seconds of eventsub.start() to not be disconnected.
     await eventsub.listen_channel_follow_v2(user.id, user.id, on_follow)
     await eventsub.listen_channel_chat_message(user.id, user.id, on_message)
+
     async def stopper():
         print("Stopping twitch event listener")
         # stopping both eventsub as well as gracefully closing the connection to the API
         await eventsub.stop()
         await twitch.close()
-    return stopper
 
+    return stopper
 
 
 async def run_http_server():
@@ -102,15 +107,18 @@ async def run_http_server():
             return web.json_response({})
         action = asdict(actions.pop(0))
         return web.json_response(action)
+
     app = web.Application()
-    app.router.add_get('/get-action', handle_get_action)
+    app.router.add_get("/get-action", handle_get_action)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, 'localhost', 8832)
+    site = web.TCPSite(runner, "localhost", 8832)
     await site.start()
     print("HTTP server started on http://localhost:8832")
+
     async def stopper():
         print("Stopping http server")
+
     return stopper
 
 
@@ -124,6 +132,7 @@ async def main():
         pass
     finally:
         await asyncio.gather(http_stopper(), twitch_stopper())
+
 
 if __name__ == "__main__":
     asyncio.run(main())
