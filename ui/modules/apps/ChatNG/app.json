@@ -1,0 +1,17 @@
+{
+  "name": "ChatNG",
+  "author": "CodeCorrupt",
+  "version": "0.1",
+  "description": "Let Chat ruin your day!",
+  "directive": "chatng",
+  "domElement": "<chatng></chatng>",
+  "preserveAspectRatio": true,
+  "css": {
+    "width": "300px",
+    "height": "300px",
+    "top": "300px",
+    "left": "500px",
+    "min-width": "150px",
+    "min-height": "150px"
+  }
+}
