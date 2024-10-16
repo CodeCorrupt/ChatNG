@@ -31,6 +31,14 @@ function _M.setSteer(self, val)
 	end
 end
 
+function _M.reset(self)
+	log("D", "reset", "RESETTING...: ")
+	-- obj:queueGameEngineLua('extensions.hook("trackVehReset")')
+	--recovery.startRecovering()
+	--recovery.stopRecovering()
+	recovery.loadHome()
+end
+
 
 function _M.updateGFX(self, dt)
 	if _M.throttleOverride or _M.brakeOverride or _M.steeringOverride then

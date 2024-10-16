@@ -1,11 +1,12 @@
 const MAX_MESSAGE_LENGTH = 100;
 const MAX_USERNAME_LENGTH = 25;
+const RESET_THRESHOLD = 0.9;
 
 class LeakyBucket {
-  constructor(capacity, leakRate, updateCallback) {
+  constructor(capacity, leakRate, onChangeCallback) {
     this.capacity = capacity;
     this.leakRate = leakRate;
-    this.updateCallback = updateCallback;
+    this.onChangeCallback = onChangeCallback;
     this.water = 0;
     this._leakInterval = null;
     this.start();
@@ -15,7 +16,7 @@ class LeakyBucket {
     const prevValue = this.water;
     this.water = Math.min(this.water + amount, this.capacity);
     if (this.water !== prevValue) {
-      this.updateCallback(prevValue, this.water, 0);
+      this.onChangeCallback(prevValue, this.water, 0);
     }
   }
 
@@ -24,20 +25,12 @@ class LeakyBucket {
     const prevValue = this.water;
     this.water = Math.max(this.water - this.leakRate * dt, 0);
     if (this.water !== prevValue) {
-      this.updateCallback(prevValue, this.water, dt);
+      this.onChangeCallback(prevValue, this.water, dt);
     }
   }
 
   value() {
     return this.water;
-  }
-
-  isFull() {
-    return this.water === this.capacity;
-  }
-
-  isEmpty() {
-    return this.water === 0;
   }
 
   start(leakInterval = 100) {
@@ -55,8 +48,12 @@ class LeakyBucket {
   }
 
   reset() {
-    this.water = 0;
     this.stop();
+    if (this.water !== 0) {
+      this.water = 0;
+      this.onChangeCallback(this.water, 0, 0);
+    }
+    this.start();
   }
 }
 
@@ -84,11 +81,13 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         </div>
         <input type="text" ng-model="channelName" placeholder="Enter Twitch channel name">
         <button ng-click="connectToChat()">Connect</button>
+        <div ng-if="!wssConnected">Not connected!!!</div>
         <div>
           <div><button ng-click="simChat('+')">Accelerate</button> {{pValue}}</div>
           <div><button ng-click="simChat('-')">Decelerate</button> {{mValue}}</div>
           <div><button ng-click="simChat('<')">Steer Left</button> {{lValue}}</div>
           <div><button ng-click="simChat('>')">Steer Right</button> {{rValue}}</div>
+          <div><button ng-click="simChat('f')">Reset</button> {{resetValue}}</div>
         </div>
       </div>
     `,
@@ -101,21 +100,24 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       scope.mValue = 0;
       scope.lValue = 0;
       scope.rValue = 0;
+      scope.resetValue = 0;
+      scope.wssConnected = false;
 
 
       let socket;
       let usernameColorMap = {};
-      function onLeakyBucketUpdateCallback(scopeName) {
+      function onLeakyBucketOnChangeCallback(scopeName) {
         return function (oldValue, newValue, dt) {
           scope[scopeName] = newValue;
           applyOverrides();
         }
       }
       let controlLeakyBuckets = {
-        accelerate: new LeakyBucket(1, 0.1, onLeakyBucketUpdateCallback('pValue')),
-        decelerate: new LeakyBucket(1, 0.1, onLeakyBucketUpdateCallback('mValue')),
-        steerLeft: new LeakyBucket(1, 0.1, onLeakyBucketUpdateCallback('lValue')),
-        steerRight: new LeakyBucket(1, 0.1, onLeakyBucketUpdateCallback('rValue')),
+        accelerate: new LeakyBucket(1, 0.1, onLeakyBucketOnChangeCallback('pValue')),
+        decelerate: new LeakyBucket(1, 0.1, onLeakyBucketOnChangeCallback('mValue')),
+        steerLeft: new LeakyBucket(1, 0.1, onLeakyBucketOnChangeCallback('lValue')),
+        steerRight: new LeakyBucket(1, 0.1, onLeakyBucketOnChangeCallback('rValue')),
+        reset: new LeakyBucket(1, 0.1, onLeakyBucketOnChangeCallback('resetValue')),
       }
 
       scope.simChat = function (message) {
@@ -142,6 +144,10 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           socket.send('PASS SCHMOOPIIE');
           socket.send('NICK justinfan12345');
           socket.send('JOIN #' + scope.channelName);
+          console.info(`Connected to Twitch chat for channel: ${scope.channelName}`);
+          scope.$apply(function () {
+            scope.wssConnected = true;
+          });
         };
 
         socket.onmessage = function (event) {
@@ -175,6 +181,17 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
             console.warn(`Unhandled message: ${message}`);
           }
         };
+
+        socket.onclose = function () {
+          console.info(`Disconnected from Twitch chat for channel: ${scope.channelName}`);
+          scope.$apply(function () {
+            scope.wssConnected = false;
+          });
+        }
+
+        socket.onerror = function (error) {
+          console.error(`Error: ${error.message}`);
+        }
       };
 
       function getColor(username) {
@@ -185,7 +202,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       }
 
       function parsePrivmsg(rawMessage) {
-        const validCmds = ['+', '-', '<', '>'];
+        const validCmds = ['+', '-', '<', '>', 'f'];
         const parts = rawMessage.split(' ');
         const parsedMsg = {
           username: parts[0].split('!')[0].substring(1).trim().slice(0, MAX_USERNAME_LENGTH),
@@ -203,16 +220,19 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       function processCommand(parsedMessage) {
         switch (parsedMessage.text) {
           case '+':
-            controlLeakyBuckets.accelerate.fill(0.1);
+            controlLeakyBuckets.accelerate.fill(0.3);
             break;
           case '-':
-            controlLeakyBuckets.decelerate.fill(0.1);
+            controlLeakyBuckets.decelerate.fill(0.3);
             break;
           case '<':
-            controlLeakyBuckets.steerLeft.fill(0.1);
+            controlLeakyBuckets.steerLeft.fill(0.3);
             break;
           case '>':
-            controlLeakyBuckets.steerRight.fill(0.1);
+            controlLeakyBuckets.steerRight.fill(0.3);
+            break;
+          case 'f':
+            controlLeakyBuckets.reset.fill(0.3);
             break;
           default:
             console.warn(`Unrecognized command: ${parsedMessage.text}`);
@@ -220,21 +240,35 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       }
 
       function applyOverrides() {
+        const shouldReset = controlLeakyBuckets.reset.value() > RESET_THRESHOLD;
+        if (shouldReset) {
+          controlLeakyBuckets.accelerate.reset();
+          controlLeakyBuckets.decelerate.reset();
+          controlLeakyBuckets.steerLeft.reset();
+          controlLeakyBuckets.steerRight.reset();
+          controlLeakyBuckets.reset.reset();
+        }
         const desiredSteer = controlLeakyBuckets.steerRight.value() - controlLeakyBuckets.steerLeft.value();
         const desiredAccell = controlLeakyBuckets.accelerate.value() - controlLeakyBuckets.decelerate.value();
         const throttlePos = Math.min(1, Math.max(0, desiredAccell));
-        const brake = Math.min(1, Math.max(0, -desiredAccell));
+        const brakePos = Math.min(1, Math.max(0, -desiredAccell));
         const steerPos = Math.min(1, Math.max(-1, desiredSteer));
         bngApi.engineLua(
           `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setThrottle(${throttlePos})')`
         );
         bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setBrake(${brake})')`
+          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setBrake(${brakePos})')`
         );
         bngApi.engineLua(
           `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setSteer(${steerPos})')`
         );
+        if (shouldReset) {
+          bngApi.engineLua(
+            `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:reset()')`
+          );
+        }
       }
+
 
       element.ready(function () {
         scope.channelName = 'codecorrupt'
