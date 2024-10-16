@@ -86,6 +86,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           <span ng-if="!chatControlling">Start</span>
         </button>
         <div ng-if="!wssConnected">Not connected!!!</div>
+        <div ng-if="wssConnected">Connected!!!</div>
         <div>
           <div><button ng-click="simChat('+')">Accelerate</button> {{pValue}}</div>
           <div><button ng-click="simChat('-')">Decelerate</button> {{mValue}}</div>
@@ -106,7 +107,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       scope.rValue = 0;
       scope.resetValue = 0;
       scope.wssConnected = false;
-      scope.chatControlling = false;
+      scope.chatControlling = true;
 
       let socket;
       let usernameColorMap = {};
@@ -142,10 +143,19 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
 
 
       scope.connectToChat = function () {
-        if (socket) {
-          socket.close();
+        if (scope.channelName) {
+          connectWebsocket();
+        } else {
+          console.warn('Channel name is empty!');
         }
+      };
 
+      function connectWebsocket() {
+        console.debug(`Websocket readyState: ${socket ? socket.readyState : 'null'}`);
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          console.error('SOCKET ALREADY OPEN');
+          return;
+        }
         socket = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
 
         socket.onopen = function () {
@@ -155,10 +165,25 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           socket.send('NICK justinfan12345');
           socket.send('JOIN #' + scope.channelName);
           console.info(`Connected to Twitch chat for channel: ${scope.channelName}`);
+          console.log(`BEFORE scope.wssConnected: ${scope.wssConnected}`);
           scope.$apply(function () {
             scope.wssConnected = true;
           });
+          console.log(`AFTER scope.wssConnected: ${scope.wssConnected}`);
         };
+
+        socket.onclose = function () {
+          console.warn(`Disconnected from Twitch chat for channel: ${scope.channelName}`);
+          scope.$apply(function () {
+            scope.wssConnected = false;
+          });
+          reconnectWebsocket();
+        }
+
+        socket.onerror = function (error) {
+          console.error(`Error: ${error.message}`);
+          socket.close();
+        }
 
         socket.onmessage = function (event) {
           const message = event.data;
@@ -191,18 +216,15 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
             console.warn(`Unhandled message: ${message}`);
           }
         };
+      }
 
-        socket.onclose = function () {
-          console.info(`Disconnected from Twitch chat for channel: ${scope.channelName}`);
-          scope.$apply(function () {
-            scope.wssConnected = false;
-          });
-        }
-
-        socket.onerror = function (error) {
-          console.error(`Error: ${error.message}`);
-        }
-      };
+      function reconnectWebsocket() {
+        console.debug("Reconnecting websocket in 3 seconds...");
+        setTimeout(() => {
+          console.log('Reconnecting websocket');
+          connectWebsocket();
+        }, 3000);
+      }
 
       function getColor(username) {
         if (!usernameColorMap[username]) {
@@ -251,6 +273,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
 
       function applyOverrides() {
         if (!scope.chatControlling) {
+          console.debug("Skipping control overrides, chat control is disabled");
           return;
         }
         const shouldReset = controlLeakyBuckets.reset.value() > RESET_THRESHOLD;

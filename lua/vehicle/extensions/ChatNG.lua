@@ -1,14 +1,14 @@
 local _M = {}
 
 function _M.reset(self)
-	log("D", "reset", "RESETTING...: ")
+	-- log("D", "reset", "RESETTING...: ")
 	-- obj:queueGameEngineLua('extensions.hook("trackVehReset")')
-	--recovery.startRecovering()
-	--recovery.stopRecovering()
+	-- recovery.startRecovering()
+	-- recovery.stopRecovering()
 	recovery.loadHome()
 end
 
-_M.chatControlling = false
+_M.chatControlling = true
 _M.throttleOverride = 0
 _M.brakeOverride = 0
 _M.steeringOverride = 0
@@ -17,7 +17,7 @@ function _M.setThrottle(self, val)
 	if not _M.chatControlling then
 		return
 	end
-	log("D", "setThrottle", "SET THROTTLE: " .. val)
+	-- log("D", "setThrottle", "SET THROTTLE: " .. val)
 	_M.throttleOverride = val
 end
 
@@ -25,7 +25,7 @@ function _M.setBrake(self, val)
 	if not _M.chatControlling then
 		return
 	end
-	log("D", "setBrake", "SET BRAKE: " .. val)
+	-- log("D", "setBrake", "SET BRAKE: " .. val)
 	_M.brakeOverride = val
 end
 
@@ -33,7 +33,7 @@ function _M.setSteer(self, val)
 	if not _M.chatControlling then
 		return
 	end
-	log("D", "setSteer", "SET STEERING: " .. val)
+	-- log("D", "setSteer", "SET STEERING: " .. val)
 	_M.steeringOverride = val
 end
 
