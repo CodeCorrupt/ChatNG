@@ -1,4 +1,4 @@
-# ChatNG - Let chat control your (sim) vehicle
+# ChatNG - Let Chat drive
 
 ChatNG is a mod that listens to your Twitch chat and let's them control a vehicle in your BeamNG world.
 
