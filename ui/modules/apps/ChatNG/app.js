@@ -81,6 +81,10 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         </div>
         <input type="text" ng-model="channelName" placeholder="Enter Twitch channel name">
         <button ng-click="connectToChat()">Connect</button>
+        <button ng-click="toggleChatControlling()">
+          <span ng-if="chatControlling">Stop</span>
+          <span ng-if="!chatControlling">Start</span>
+        </button>
         <div ng-if="!wssConnected">Not connected!!!</div>
         <div>
           <div><button ng-click="simChat('+')">Accelerate</button> {{pValue}}</div>
@@ -102,7 +106,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       scope.rValue = 0;
       scope.resetValue = 0;
       scope.wssConnected = false;
-
+      scope.chatControlling = false;
 
       let socket;
       let usernameColorMap = {};
@@ -129,6 +133,12 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         })
       }
 
+      scope.toggleChatControlling = function () {
+        scope.chatControlling = !scope.chatControlling;
+        bngApi.engineLua(
+          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setChatControlling(${scope.chatControlling})')`
+        );
+      }
 
 
       scope.connectToChat = function () {
@@ -240,6 +250,9 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       }
 
       function applyOverrides() {
+        if (!scope.chatControlling) {
+          return;
+        }
         const shouldReset = controlLeakyBuckets.reset.value() > RESET_THRESHOLD;
         if (shouldReset) {
           controlLeakyBuckets.accelerate.reset();
