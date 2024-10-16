@@ -1,6 +1,6 @@
 const MAX_MESSAGE_LENGTH = 100;
 const MAX_USERNAME_LENGTH = 25;
-const RESET_THRESHOLD = 0.9;
+const RESET_THRESHOLD = 0.5;
 
 class LeakyBucket {
   constructor(capacity, leakRate, onChangeCallback) {
@@ -80,13 +80,14 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           </div>
         </div>
         <input type="text" ng-model="channelName" placeholder="Enter Twitch channel name">
-        <button ng-click="connectToChat()">Connect</button>
+        <button ng-click="toggleTwitchConnection()">
+          <div ng-if="!wssConnected">Connect</div>
+          <div ng-if="wssConnected">Disconnect</div>
+        </button>
         <button ng-click="toggleChatControlling()">
           <span ng-if="chatControlling">Stop</span>
           <span ng-if="!chatControlling">Start</span>
         </button>
-        <div ng-if="!wssConnected">Not connected!!!</div>
-        <div ng-if="wssConnected">Connected!!!</div>
         <div>
           <div><button ng-click="simChat('+')">Accelerate</button> {{pValue}}</div>
           <div><button ng-click="simChat('-')">Decelerate</button> {{mValue}}</div>
@@ -111,6 +112,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
 
       let socket;
       let usernameColorMap = {};
+      let shouldReconnect = true;
       function onLeakyBucketOnChangeCallback(scopeName) {
         return function (oldValue, newValue, dt) {
           scope[scopeName] = newValue;
@@ -136,17 +138,20 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
 
       scope.toggleChatControlling = function () {
         scope.chatControlling = !scope.chatControlling;
-        bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setChatControlling(${scope.chatControlling})')`
-        );
       }
 
-
-      scope.connectToChat = function () {
-        if (scope.channelName) {
-          connectWebsocket();
+      scope.toggleTwitchConnection = function () {
+        if (!scope.wssConnected) {
+          if (scope.channelName) {
+            connectWebsocket();
+          } else {
+            console.warn('Channel name is empty!');
+          }
         } else {
-          console.warn('Channel name is empty!');
+          if (socket) {
+            shouldReconnect = false;
+            socket.close();
+          }
         }
       };
 
@@ -169,6 +174,7 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           scope.$apply(function () {
             scope.wssConnected = true;
           });
+          shouldReconnect = true;
           console.log(`AFTER scope.wssConnected: ${scope.wssConnected}`);
         };
 
@@ -177,7 +183,8 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
           scope.$apply(function () {
             scope.wssConnected = false;
           });
-          reconnectWebsocket();
+          if (shouldReconnect)
+            reconnectWebsocket();
         }
 
         socket.onerror = function (error) {
@@ -271,11 +278,33 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         }
       }
 
+      function sendValuesToVehicle(vehId, throttle, brake, steer, shouldReset) {
+        bngApi.engineLua(
+          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setThrottle(${throttle})')`
+        );
+        bngApi.engineLua(
+          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setBrake(${brake})')`
+        );
+        bngApi.engineLua(
+          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setSteer(${steer})')`
+        );
+        if (shouldReset) {
+          bngApi.engineLua(
+            `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:reset()')`
+          );
+        }
+      }
+
+      let needToClear = false;
       function applyOverrides() {
         if (!scope.chatControlling) {
-          console.debug("Skipping control overrides, chat control is disabled");
+          if (needToClear) {
+            sendValuesToVehicle(0, 0, 0, 0, false);
+            needToClear = false;
+          }
           return;
         }
+        needToClear = true;
         const shouldReset = controlLeakyBuckets.reset.value() > RESET_THRESHOLD;
         if (shouldReset) {
           controlLeakyBuckets.accelerate.reset();
@@ -289,25 +318,13 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         const throttlePos = Math.min(1, Math.max(0, desiredAccell));
         const brakePos = Math.min(1, Math.max(0, -desiredAccell));
         const steerPos = Math.min(1, Math.max(-1, desiredSteer));
-        bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setThrottle(${throttlePos})')`
-        );
-        bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setBrake(${brakePos})')`
-        );
-        bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setSteer(${steerPos})')`
-        );
-        if (shouldReset) {
-          bngApi.engineLua(
-            `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:reset()')`
-          );
-        }
+        sendValuesToVehicle(0, throttlePos, brakePos, steerPos, shouldReset);
       }
 
 
       element.ready(function () {
         scope.channelName = 'codecorrupt'
+        connectWebsocket();
       });
 
       // Clean up on directive destroy
