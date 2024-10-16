@@ -2,6 +2,8 @@ const MAX_MESSAGE_LENGTH = 100;
 const MAX_USERNAME_LENGTH = 25;
 const RESET_THRESHOLD = 0.5;
 
+let socket;
+
 class LeakyBucket {
   constructor(capacity, leakRate, onChangeCallback) {
     this.capacity = capacity;
@@ -110,7 +112,6 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
       scope.wssConnected = false;
       scope.chatControlling = true;
 
-      let socket;
       let usernameColorMap = {};
       let shouldReconnect = true;
       function onLeakyBucketOnChangeCallback(scopeName) {
