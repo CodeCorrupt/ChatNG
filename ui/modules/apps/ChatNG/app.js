@@ -279,19 +279,23 @@ angular.module('beamng.apps').directive('chatng', ['$http', '$interval', functio
         }
       }
 
-      function sendValuesToVehicle(vehId, throttle, brake, steer, shouldReset) {
+      // 0 gets the current player vehicle.
+      function sendValuesToVehicle(objectID, throttle, brake, steer, shouldReset) {
+        if (objectID === 0) {
+          objectID = `be:getPlayerVehicleID(0)`;
+        }
         bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setThrottle(${throttle})')`
+          `be:getObjectByID(${objectID}):queueLuaCommand('extensions.ChatNG:setThrottle(${throttle})')`
         );
         bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setBrake(${brake})')`
+          `be:getObjectByID(${objectID}):queueLuaCommand('extensions.ChatNG:setBrake(${brake})')`
         );
         bngApi.engineLua(
-          `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:setSteer(${steer})')`
+          `be:getObjectByID(${objectID}):queueLuaCommand('extensions.ChatNG:setSteer(${steer})')`
         );
         if (shouldReset) {
           bngApi.engineLua(
-            `be:getPlayerVehicle(0):queueLuaCommand('extensions.ChatNG:reset()')`
+            `be:getObjectByID(${objectID}):queueLuaCommand('extensions.ChatNG:reset()')`
           );
         }
       }

@@ -30,6 +30,7 @@ end
 local lastThrottle = 0
 local lastBrake = 0
 local lastSteering = 0
+local restoreGearboxMode = false
 function _M.updateGFX(self, dt)
 	if _M.steeringOverride ~= 0 or lastSteering ~= 0 then
 		-- electrics.values.steering_input = _M.steeringOverride or electrics.values.steering_input
@@ -48,6 +49,16 @@ function _M.updateGFX(self, dt)
 		input.event('brake', _M.brakeOverride)
 		lastBrake = _M.brakeOverride
 	end
+end
+
+function _M.onExtensionLoaded(self)
+	log("D", "onExtensionLoaded", "EXTENSION LOADED")
+	if controller.mainController then
+        if electrics.values.gearboxMode == 'realistic' then
+          restoreGearboxMode = true
+        end
+        controller.mainController.setGearboxMode('arcade')
+      end
 end
 
 return _M
